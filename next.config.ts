@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Tell Next.js NOT to bundle pdf-parse / pdfjs-dist — let Node.js load
+  // them natively at runtime so the pdfjs worker setup isn't broken by Turbopack.
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "mammoth"],
+
   // ── Security headers applied to every response ──────────────────────
   async headers() {
     return [

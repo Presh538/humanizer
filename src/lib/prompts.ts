@@ -17,15 +17,15 @@ export interface ParaphraseParams {
 }
 
 const MODE_DESCRIPTIONS: Record<ParaphraseMode, string> = {
-  standard:  "Rewrite naturally, maintaining original meaning while sounding human.",
-  fluency:   "Rewrite for smooth, flowing prose with excellent readability.",
-  humanize:  "Rewrite to sound authentically human — with natural imperfections, varied rhythm, and genuine voice.",
+  standard:  "Rewrite naturally, maintaining original meaning while sounding like a real person wrote it.",
+  fluency:   "Rewrite for smooth, flowing prose with excellent readability and natural rhythm.",
+  humanize:  "Rewrite to sound unmistakably human — imperfect, warm, personal, with genuine voice.",
   formal:    "Rewrite in formal, professional language suitable for business or official contexts.",
   academic:  "Rewrite in scholarly academic style with appropriate terminology and structure.",
-  simple:    "Rewrite in clear, simple language that anyone can understand.",
-  creative:  "Rewrite with creative flair, vivid language, and engaging narrative voice.",
-  expand:    "Rewrite with additional context, explanation, and elaboration to expand the content.",
-  shorten:   "Rewrite as a concise summary, cutting unnecessary words while keeping core meaning.",
+  simple:    "Rewrite in clear, plain language that anyone can understand.",
+  creative:  "Rewrite with creative flair, vivid imagery, and an engaging personal voice.",
+  expand:    "Rewrite with richer context, examples, and elaboration — but keep it natural.",
+  shorten:   "Rewrite as a tight, direct summary — cut every word that isn't pulling its weight.",
 };
 
 export function buildParaphrasePrompt(
@@ -33,35 +33,75 @@ export function buildParaphrasePrompt(
   mode: ParaphraseMode,
   params: ParaphraseParams
 ): string {
-  const intensityLabel = params.intensity > 0.7 ? "aggressively" : params.intensity > 0.4 ? "moderately" : "lightly";
-  const creativityLabel = params.creativity > 0.7 ? "rich and diverse" : params.creativity > 0.4 ? "varied" : "straightforward";
-  const naturalnessLabel = params.naturalness > 0.7 ? "very conversational and human" : params.naturalness > 0.4 ? "natural" : "neutral";
+  const intensityLabel   = params.intensity   > 0.7 ? "aggressively" : params.intensity   > 0.4 ? "moderately" : "lightly";
+  const creativityLabel  = params.creativity  > 0.7 ? "rich and varied" : params.creativity  > 0.4 ? "varied" : "straightforward";
+  const naturalnessLabel = params.naturalness > 0.7 ? "conversational and personal" : params.naturalness > 0.4 ? "natural" : "neutral";
 
-  return `You are an expert human writer. Your task is to rewrite the following text in "${mode}" mode.
+  return `You are a skilled human writer who never sounds like AI. Rewrite the text below in "${mode}" mode so it reads as though a real person wrote it from scratch.
 
-Mode: ${MODE_DESCRIPTIONS[mode]}
+Mode goal: ${MODE_DESCRIPTIONS[mode]}
 
-Rewriting parameters:
-- Intensity: ${intensityLabel} (${Math.round(params.intensity * 100)}%)  — how much to change the original
-- Creativity: ${creativityLabel} vocabulary (${Math.round(params.creativity * 100)}%)
-- Naturalness: ${naturalnessLabel} tone (${Math.round(params.naturalness * 100)}%)
-- Complexity: ${Math.round(params.complexity * 100)}% sentence complexity
+Tuning:
+- Rewrite ${intensityLabel} (intensity ${Math.round(params.intensity * 100)}%)
+- Use ${creativityLabel} vocabulary (creativity ${Math.round(params.creativity * 100)}%)
+- Tone: ${naturalnessLabel} (naturalness ${Math.round(params.naturalness * 100)}%)
+- Sentence complexity: ${Math.round(params.complexity * 100)}%
 
-Critical rules to avoid AI detection:
-1. Vary sentence lengths naturally — mix short punchy sentences with longer flowing ones
-2. Use contractions where natural (don't, it's, you're, we've)
-3. Avoid patterns typical of AI: starting too many sentences with "The", "This", "It is", "Furthermore", "Additionally", "In conclusion"
-4. Add subtle transitional phrases that feel organic
-5. Occasionally use em dashes, parenthetical asides, or rhetorical questions
-6. Avoid repetitive sentence structures back-to-back
-7. Do NOT add any introductory text like "Here's the rewritten version:" — output ONLY the rewritten text
+Hard rules — breaking ANY of these will flag the text as AI-written:
+1. Mix sentence lengths aggressively. One sentence can be three words. The next might wind through a longer thought before landing somewhere unexpected.
+2. Use contractions freely (don't, it's, you're, they've, we'd).
+3. NEVER start more than one sentence in a row with "The", "This", "It", "There", "These", or "Those".
+4. NEVER use: Furthermore, Additionally, Moreover, In conclusion, It is important to note, It should be mentioned, It is worth noting, Notably, Consequently, Subsequently.
+5. Occasionally begin sentences with "And", "But", "So", or "Yet" — real writers do this.
+6. Drop in a parenthetical aside (like this one) or an em dash — they break up robotic flow.
+7. Let the occasional rhetorical question slip through naturally. Why not?
+8. Vary paragraph length. A paragraph can be one sentence.
+9. Output ONLY the rewritten text — no intro, no labels, no explanations.
 
-Input text:
+Text to rewrite:
 """
 ${text}
 """
 
-Rewritten text:`;
+Rewritten:`;
+}
+
+/**
+ * Used when the first-pass paraphrase still scores >50% AI.
+ * Focuses specifically on stripping the detected patterns.
+ */
+export function buildRefinementPrompt(
+  text: string,
+  aiScore: number,
+  detectedPatterns: string[]
+): string {
+  const patterns = detectedPatterns.length
+    ? detectedPatterns.map((p) => `- ${p}`).join("\n")
+    : "- Overly uniform sentence structure\n- Formal transitional phrases\n- Lack of personal voice";
+
+  return `This text was flagged as ${aiScore}% AI-written. Your job is to rewrite it so it reads as unmistakably human.
+
+Specific patterns that gave it away:
+${patterns}
+
+Fix every one of those patterns. Go further than you think you need to. Human writing is unpredictable — it meanders, it gets direct, it contradicts itself slightly, it uses shorthand. Capture that.
+
+Techniques to use:
+- Break up any sentence that follows a "topic + elaboration + conclusion" structure
+- Replace ALL transitional phrases (furthermore, additionally, etc.) with natural connectors (and, but, so, which means, that's why)
+- Add at least one very short sentence (under 6 words) per paragraph
+- Use at least one dash — or parenthetical — per 150 words
+- If a sentence starts with "The [noun] [verb]", rewrite it to start differently
+- Use first-person phrasing where it fits ("you'll notice", "think of it this way")
+
+Output ONLY the rewritten text — no intro, no commentary.
+
+Text to fix:
+"""
+${text}
+"""
+
+Fixed version:`;
 }
 
 export function buildDetectionPrompt(text: string): string {

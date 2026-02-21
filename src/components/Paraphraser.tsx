@@ -16,6 +16,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { AiScoreRing } from "./AiScoreRing";
 import { ModeDialKit } from "./ModeDialKit";
+// import { PdfUpload } from "./PdfUpload"; // TODO: re-enable once file upload is stable
 import type { ParaphraseMode, ParaphraseParams } from "@/lib/prompts";
 import type { DetectionResult } from "@/app/api/detect/route";
 
@@ -107,6 +108,7 @@ export function Paraphraser() {
   const [activeMode, setActiveMode]   = useState<ParaphraseMode>("humanize");
   const [dialParams, setDialParams]   = useState<ParaphraseParams>(DEFAULT_PARAMS);
   const [isCopied, setIsCopied]       = useState(false);
+  // const [pdfMeta, setPdfMeta]         = useState<{ name: string; pages: number } | null>(null); // TODO: file upload
 
   // ── API state
   const [isParaphrasing, setIsParaphrasing]         = useState(false);
@@ -245,6 +247,15 @@ export function Paraphraser() {
       if (res.ok) setOutputDetection(data as DetectionResult);
     } catch { /* silent */ }
   }, []);
+
+  // TODO: re-enable once file upload is stable
+  // const handlePdfExtracted = useCallback((text: string, filename: string, pages: number) => {
+  //   setInputText(text);
+  //   setPdfMeta({ name: filename, pages });
+  //   setDetection(null);
+  //   setOutputText("");
+  //   hasParaphrasedRef.current = false;
+  // }, []);
 
   const copyOutput = useCallback(() => {
     if (!outputText) return;
@@ -389,7 +400,7 @@ export function Paraphraser() {
         >
           {/* ── LEFT: Input */}
           <motion.div
-            className="flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+            className="relative flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
             initial={{ x: -20, opacity: 0 }}
             animate={{ x: stage >= 4 ? 0 : -20, opacity: stage >= 4 ? 1 : 0 }}
             transition={{ ...CARD.spring, delay: 0.05 }}
@@ -408,10 +419,10 @@ export function Paraphraser() {
 
             <textarea
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Paste your text here to detect AI and humanize it…"
+              onChange={(e) => { setInputText(e.target.value); }}
+              placeholder="Paste your text here — or attach a PDF below…"
               className="flex-1 p-4 text-sm text-gray-800 placeholder-gray-300 resize-none outline-none bg-white min-h-[320px] leading-relaxed"
-              maxLength={8000}
+              maxLength={50000}
             />
 
             <AnimatePresence>
@@ -445,13 +456,23 @@ export function Paraphraser() {
               </div>
             )}
 
-            <div className="px-4 py-3 border-t border-gray-100 bg-white flex items-center justify-between">
-              <button
-                onClick={() => { setInputText(""); setDetection(null); setOutputText(""); hasParaphrasedRef.current = false; }}
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                Clear
-              </button>
+            <div className="px-4 py-3 border-t border-gray-100 bg-white flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  onClick={() => { setInputText(""); setDetection(null); setOutputText(""); hasParaphrasedRef.current = false; }}
+                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                >
+                  Clear
+                </button>
+
+                {/* TODO: re-enable file upload badge + button once file upload is stable */}
+                {/* <AnimatePresence>
+                  {pdfMeta && (
+                    <motion.span ...>📄 {pdfMeta.name} · {pdfMeta.pages}p</motion.span>
+                  )}
+                </AnimatePresence>
+                <PdfUpload onTextExtracted={handlePdfExtracted} disabled={isParaphrasing} /> */}
+              </div>
               <motion.button
                 onClick={handleParaphrase}
                 disabled={!inputText.trim() || isParaphrasing}
@@ -521,6 +542,11 @@ export function Paraphraser() {
                     <p className="text-xs text-gray-400 font-medium">
                       Rewriting in <span className="text-emerald-600 capitalize">{activeMode}</span> mode…
                     </p>
+                    {inputText.length > 3000 && (
+                      <p className="text-[10px] text-gray-300 text-center">
+                        Large document — processing in sections, this may take a moment
+                      </p>
+                    )}
                   </motion.div>
                 ) : outputText ? (
                   <motion.div

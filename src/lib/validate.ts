@@ -31,7 +31,7 @@ export function clampParams(params: ParaphraseParams): ParaphraseParams {
 }
 
 // ─── Text sanitization ────────────────────────────────────
-const MAX_TEXT_LENGTH = 8000;
+const MAX_TEXT_LENGTH = 50000;
 const MIN_WORD_COUNT  = 10;
 
 /**
