@@ -16,7 +16,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { AiScoreRing } from "./AiScoreRing";
 import { ModeDialKit } from "./ModeDialKit";
-// import { PdfUpload } from "./PdfUpload"; // TODO: re-enable once file upload is stable
+import { PdfUpload } from "./PdfUpload";
 import type { ParaphraseMode, ParaphraseParams } from "@/lib/prompts";
 import type { DetectionResult } from "@/app/api/detect/route";
 
@@ -108,7 +108,7 @@ export function Paraphraser() {
   const [activeMode, setActiveMode]   = useState<ParaphraseMode>("humanize");
   const [dialParams, setDialParams]   = useState<ParaphraseParams>(DEFAULT_PARAMS);
   const [isCopied, setIsCopied]       = useState(false);
-  // const [pdfMeta, setPdfMeta]         = useState<{ name: string; pages: number } | null>(null); // TODO: file upload
+  const [pdfMeta, setPdfMeta]         = useState<{ name: string; pages: number } | null>(null);
 
   // ── API state
   const [isParaphrasing, setIsParaphrasing]         = useState(false);
@@ -123,6 +123,7 @@ export function Paraphraser() {
   const rerunDebounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyTimeoutRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const paraphraseAbortRef  = useRef<AbortController | null>(null);
+  const paraphraseCallId    = useRef(0);        // incremented on each new call; old calls check before touching state
   const hasParaphrasedRef   = useRef(false);   // true after first successful paraphrase
   const inputTextRef        = useRef(inputText);
   const activeModeRef       = useRef(activeMode);
@@ -190,6 +191,9 @@ export function Paraphraser() {
     if (paraphraseAbortRef.current) paraphraseAbortRef.current.abort();
     paraphraseAbortRef.current = new AbortController();
 
+    // Stamp this call so stale finally/catch blocks don't clobber newer state
+    const callId = ++paraphraseCallId.current;
+
     setIsParaphrasing(true);
     setOutputError(null);
     setOutputText("");
@@ -202,14 +206,17 @@ export function Paraphraser() {
         signal: paraphraseAbortRef.current.signal,
       });
       const data = await res.json();
+      if (callId !== paraphraseCallId.current) return; // superseded
       if (!res.ok) throw new Error(data.error);
       setOutputText(data.result);
       hasParaphrasedRef.current = true;
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
+      if (callId !== paraphraseCallId.current) return; // superseded
       setOutputError(err instanceof Error ? err.message : "Paraphrase failed");
     } finally {
-      setIsParaphrasing(false);
+      // Only the latest call should flip the loading flag off
+      if (callId === paraphraseCallId.current) setIsParaphrasing(false);
     }
   }, []);
 
@@ -248,14 +255,13 @@ export function Paraphraser() {
     } catch { /* silent */ }
   }, []);
 
-  // TODO: re-enable once file upload is stable
-  // const handlePdfExtracted = useCallback((text: string, filename: string, pages: number) => {
-  //   setInputText(text);
-  //   setPdfMeta({ name: filename, pages });
-  //   setDetection(null);
-  //   setOutputText("");
-  //   hasParaphrasedRef.current = false;
-  // }, []);
+  const handlePdfExtracted = useCallback((text: string, filename: string, pages: number) => {
+    setInputText(text);
+    setPdfMeta({ name: filename, pages });
+    setDetection(null);
+    setOutputText("");
+    hasParaphrasedRef.current = false;
+  }, []);
 
   const copyOutput = useCallback(() => {
     if (!outputText) return;
@@ -421,7 +427,7 @@ export function Paraphraser() {
               value={inputText}
               onChange={(e) => { setInputText(e.target.value); }}
               placeholder="Paste your text here — or attach a PDF below…"
-              className="flex-1 p-4 text-sm text-gray-800 placeholder-gray-300 resize-none outline-none bg-white min-h-[320px] leading-relaxed"
+              className="p-4 text-sm text-gray-800 placeholder-gray-300 resize-none outline-none bg-white h-[320px] overflow-y-auto leading-relaxed"
               maxLength={50000}
             />
 
@@ -459,19 +465,26 @@ export function Paraphraser() {
             <div className="px-4 py-3 border-t border-gray-100 bg-white flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <button
-                  onClick={() => { setInputText(""); setDetection(null); setOutputText(""); hasParaphrasedRef.current = false; }}
+                  onClick={() => { setInputText(""); setPdfMeta(null); setDetection(null); setOutputText(""); hasParaphrasedRef.current = false; }}
                   className="text-xs text-gray-400 hover:text-gray-600 transition-colors shrink-0"
                 >
                   Clear
                 </button>
 
-                {/* TODO: re-enable file upload badge + button once file upload is stable */}
-                {/* <AnimatePresence>
+                <AnimatePresence>
                   {pdfMeta && (
-                    <motion.span ...>📄 {pdfMeta.name} · {pdfMeta.pages}p</motion.span>
+                    <motion.span
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                      className="text-[10px] text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5 truncate max-w-[140px]"
+                    >
+                      📄 {pdfMeta.name} · {pdfMeta.pages}p
+                    </motion.span>
                   )}
                 </AnimatePresence>
-                <PdfUpload onTextExtracted={handlePdfExtracted} disabled={isParaphrasing} /> */}
+                <PdfUpload onTextExtracted={handlePdfExtracted} disabled={isParaphrasing} />
               </div>
               <motion.button
                 onClick={handleParaphrase}
@@ -519,7 +532,7 @@ export function Paraphraser() {
               </div>
             </div>
 
-            <div className="flex-1 relative min-h-[320px]">
+            <div className="relative h-[320px]">
               <AnimatePresence mode="wait">
                 {isParaphrasing ? (
                   <motion.div
