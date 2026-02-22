@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "src/app/api/paraphrase/route.ts": { "maxDuration": 300 },
+    "src/app/api/detect/route.ts":    { "maxDuration": 60  },
+    "src/app/api/parse-pdf/route.ts": { "maxDuration": 60  }
+  }
+}

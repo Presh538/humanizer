@@ -71,7 +71,7 @@ async function getAiScore(text: string): Promise<{ score: number; patterns: stri
   try {
     const sample  = text.length > SCORE_SAMPLE_CHARS ? text.slice(0, SCORE_SAMPLE_CHARS) : text;
     const message = await client.messages.create({
-      model:      "claude-opus-4-6",
+      model:      "claude-haiku-4-5-20251001",
       max_tokens: 256,
       messages:   [{ role: "user", content: buildDetectionPrompt(sample) }],
     });
